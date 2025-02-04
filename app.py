@@ -62,15 +62,17 @@ def index():
 def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
-    
+
     file = request.files['file']
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
-    
-    rental_details = extract_rental_details(file)
-    output_pdf = generate_summary_pdf(rental_details)
-    
-    return send_file(output_pdf, mimetype='application/pdf', as_attachment=True, download_name="voorblad_samenvatting.pdf")
+
+    try:
+        rental_details = extract_rental_details(file)
+        output_pdf = generate_summary_pdf(rental_details)
+        return send_file(output_pdf, mimetype='application/pdf', as_attachment=True, download_name="voorblad_samenvatting.pdf")
+    except Exception as e:
+        return jsonify({"error": f"Interne fout: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
