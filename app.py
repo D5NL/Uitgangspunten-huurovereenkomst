@@ -4,7 +4,7 @@ import re
 from fpdf import FPDF
 import io
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='', static_folder='.')
 
 def extract_rental_details(pdf_file):
     details = {}
@@ -13,27 +13,27 @@ def extract_rental_details(pdf_file):
         text = page.get_text("text")
         if text:
             if "Verhuurder" in text:
-                match = re.search(r'Verhuurder\\s*:\\s*(.*)', text)
+                match = re.search(r'Verhuurder\s*:\s*(.*)', text)
                 if match:
                     details["Verhuurder"] = match.group(1)
             if "Huurder" in text:
-                match = re.search(r'Huurder\\s*:\\s*(.*)', text)
+                match = re.search(r'Huurder\s*:\s*(.*)', text)
                 if match:
                     details["Huurder"] = match.group(1)
             if "Object" in text:
-                match = re.search(r'Object\\s*:\\s*(.*)', text)
+                match = re.search(r'Object\s*:\s*(.*)', text)
                 if match:
                     details["Object"] = match.group(1)
             if "Huurprijs" in text:
-                match = re.search(r'Huurprijs op maandbasis\\s*:\\s*(.*)', text)
+                match = re.search(r'Huurprijs op maandbasis\s*:\s*(.*)', text)
                 if match:
                     details["Huurprijs"] = match.group(1)
             if "Huuringangsdatum" in text:
-                match = re.search(r'Huuringangsdatum\\s*:\\s*(.*)', text)
+                match = re.search(r'Huuringangsdatum\s*:\s*(.*)', text)
                 if match:
                     details["Huuringangsdatum"] = match.group(1)
             if "Einddatum" in text:
-                match = re.search(r'Einddatum\\s*:\\s*(.*)', text)
+                match = re.search(r'Einddatum\s*:\s*(.*)', text)
                 if match:
                     details["Einddatum"] = match.group(1)
     return details
@@ -53,6 +53,10 @@ def generate_summary_pdf(details):
     pdf.output(pdf_output)
     pdf_output.seek(0)
     return pdf_output
+
+@app.route("/")
+def index():
+    return app.send_static_file("index.html")
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
