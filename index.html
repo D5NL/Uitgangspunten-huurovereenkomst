@@ -97,7 +97,6 @@
             padding: 15px;
             border-radius: 5px;
             text-align: center;
-            display: none;
         }
 
         .status.error {
@@ -118,30 +117,10 @@
             border: 1px solid #fff3cd;
         }
 
-        .progress {
-            display: none;
-            margin-top: 20px;
-            height: 4px;
-            background-color: #f5f5f5;
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background-color: var(--primary-color);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .upload-form {
-                padding: 20px;
-            }
+        .selected-file {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
         }
     </style>
 </head>
@@ -152,102 +131,52 @@
             <form id="uploadForm">
                 <div class="file-input-container">
                     <label for="fileInput" class="file-input-label">
-                        <span id="fileLabel">Sleep een PDF bestand hier of klik om te uploaden</span>
+                        Klik hier om een PDF bestand te selecteren
                     </label>
-                    <input type="file" id="fileInput" class="file-input" name="file" accept=".pdf" required />
+                    <input type="file" id="fileInput" class="file-input" accept=".pdf" required />
+                    <div id="selectedFile" class="selected-file"></div>
                 </div>
-                <button type="submit" id="submitButton" class="button" disabled>
-                    Upload en Genereer Voorblad
-                </button>
+                <button type="submit" id="submitButton" class="button">Upload en Genereer Voorblad</button>
             </form>
-            <div class="progress" id="progressBar">
-                <div class="progress-bar"></div>
-            </div>
-            <div id="status" class="status"></div>
+            <div id="status" class="status" style="display: none;"></div>
         </div>
     </div>
 
     <script>
         const form = document.getElementById('uploadForm');
         const fileInput = document.getElementById('fileInput');
-        const fileLabel = document.getElementById('fileLabel');
+        const selectedFile = document.getElementById('selectedFile');
         const submitButton = document.getElementById('submitButton');
         const status = document.getElementById('status');
-        const progressBar = document.getElementById('progressBar');
-        const progressBarFill = progressBar.querySelector('.progress-bar');
 
-        function updateStatus(message, type) {
-            status.textContent = message;
-            status.style.display = 'block';
-            status.className = `status ${type}`;
-        }
-
-        function resetStatus() {
-            status.style.display = 'none';
-            status.className = 'status';
-        }
-
-        function updateProgress(percent) {
-            progressBar.style.display = 'block';
-            progressBarFill.style.width = `${percent}%`;
-        }
-
-        function resetProgress() {
-            progressBar.style.display = 'none';
-            progressBarFill.style.width = '0%';
-        }
-
+        // Bestandsselectie handler
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                fileLabel.textContent = file.name;
+                selectedFile.textContent = `Geselecteerd bestand: ${file.name}`;
                 submitButton.disabled = false;
-                resetStatus();
-                resetProgress();
             } else {
-                fileLabel.textContent = 'Sleep een PDF bestand hier of klik om te uploaden';
+                selectedFile.textContent = '';
                 submitButton.disabled = true;
             }
         });
 
-        form.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            form.classList.add('dragover');
-        });
-
-        form.addEventListener('dragleave', () => {
-            form.classList.remove('dragover');
-        });
-
-        form.addEventListener('drop', (e) => {
-            e.preventDefault();
-            form.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type === 'application/pdf') {
-                fileInput.files = e.dataTransfer.files;
-                fileLabel.textContent = file.name;
-                submitButton.disabled = false;
-                resetStatus();
-                resetProgress();
-            } else {
-                updateStatus('Alleen PDF bestanden zijn toegestaan', 'error');
-            }
-        });
-
+        // Form submit handler
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
             const file = fileInput.files[0];
             if (!file) {
-                updateStatus('Selecteer een bestand', 'error');
+                showStatus('Selecteer eerst een PDF bestand.', 'error');
                 return;
             }
 
+            // Toon laadstatus
+            showStatus('Bezig met uploaden...', 'warning');
+            submitButton.disabled = true;
+
             const formData = new FormData();
             formData.append('file', file);
-
-            submitButton.disabled = true;
-            resetStatus();
-            updateProgress(0);
 
             try {
                 const response = await fetch('/upload', {
@@ -255,18 +184,38 @@
                     body: formData
                 });
 
-                updateProgress(50);
-
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Er is een fout opgetreden');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Er is een fout opgetreden bij het uploaden.');
                 }
 
-                updateProgress(75);
-
+                // Download het gegenereerde PDF bestand
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.style.display = 'none';
                 a.href = url;
-                a.download = `voorblad_samenvatting_${new Date().toISOString().slice(0
+                a.download = 'voorblad_samenvatting.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                showStatus('Voorblad is succesvol gegenereerd en gedownload!', 'success');
+                form.reset();
+                selectedFile.textContent = '';
+
+            } catch (error) {
+                showStatus(error.message, 'error');
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
