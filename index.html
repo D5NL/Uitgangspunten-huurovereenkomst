@@ -1,116 +1,160 @@
-import React, { useState, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { AlertTriangle, CheckCircle, Upload, FileText, Edit, Save } from 'lucide-react';
-
-const ContractAnalyzer = () => {
-  const [files, setFiles] = useState([]);
-  const [analysis, setAnalysis] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [editMode, setEditMode] = useState({});
-  const [editedValues, setEditedValues] = useState({});
-
-  const onDrop = useCallback((acceptedFiles) => {
-    setFiles(acceptedFiles);
-    setError(null);
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
-    maxFiles: 1
-  });
-
-  const handleAnalyze = async () => {
-    if (files.length === 0) return;
-
-    setLoading(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.append('file', files[0]);
-
-    try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
-      const result = await response.json();
-      setAnalysis(result);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleEditMode = (field) => {
-    setEditMode(prev => ({
-      ...prev,
-      [field]: !prev[field]
-    }));
-    if (!editMode[field]) {
-      setEditedValues(prev => ({
-        ...prev,
-        [field]: analysis[field]?.value || ''
-      }));
-    }
-  };
-
-  const handleSave = async (field) => {
-    try {
-      // Save edited value
-      const response = await fetch('/api/update-field', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          field,
-          value: editedValues[field]
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Fout bij het opslaan van wijzigingen');
-      }
-
-      // Update local state
-      setAnalysis(prev => ({
-        ...prev,
-        [field]: {
-          ...prev[field],
-          value: editedValues[field],
-          modified: true
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huurovereenkomst Upload</title>
+    <style>
+        /* ... bestaande styles ... */
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 1.2em;
+            z-index: 1000;
         }
-      }));
-      toggleEditMode(field);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
 
-  return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold mb-6">Contract Analyse Tool</h1>
-        
-        {/* Upload Section */}
-        <div 
-          {...getRootProps()} 
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
-            ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-        >
-          <input {...getInputProps()} />
-          <Upload className="mx-auto h-12 w-12 text-gray-400" />
-          <p className="mt-2 text-sm text-gray-600">
-            {isDragActive
-              ? "Laat het bestand hier los..."
-              : "Sleep een PDF bestand hierheen of klik om te selecteren"}
-          </p>
-        </div
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            margin-top: 10px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #007BFF;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Huurovereenkomst</h1>
+        <form id="uploadForm">
+            <div class="file-input-container">
+                <label for="fileInput" class="file-input-label">
+                    Sleep een PDF bestand hierheen of klik om te uploaden
+                </label>
+                <input type="file" id="fileInput" name="file" accept=".pdf" required />
+                <div class="progress-bar" style="display: none;">
+                    <div class="progress-bar-fill"></div>
+                </div>
+            </div>
+            <button type="submit" class="button">Upload en Genereer Voorblad</button>
+        </form>
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+
+    <div id="loading" class="loading" style="display: none;">
+        <div>Bezig met verwerken...</div>
+    </div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const loading = document.getElementById('loading');
+        const progressBar = document.querySelector('.progress-bar');
+        const progressBarFill = document.querySelector('.progress-bar-fill');
+
+        function showLoading() {
+            loading.style.display = 'flex';
+            progressBar.style.display = 'block';
+        }
+
+        function hideLoading() {
+            loading.style.display = 'none';
+            progressBar.style.display = 'none';
+            progressBarFill.style.width = '0%';
+        }
+
+        function updateProgress(percent) {
+            progressBarFill.style.width = `${percent}%`;
+        }
+
+        function showStatus(message, isError = false) {
+            status.textContent = message;
+            status.style.display = 'block';
+            status.className = `status ${isError ? 'error' : 'success'}`;
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 16 * 1024 * 1024) {
+                    showStatus('Bestand is te groot. Maximum grootte is 16MB.', true);
+                    fileInput.value = '';
+                    return;
+                }
+                if (file.type !== 'application/pdf') {
+                    showStatus('Alleen PDF bestanden zijn toegestaan.', true);
+                    fileInput.value = '';
+                    return;
+                }
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showStatus('Selecteer eerst een bestand.', true);
+                return;
+            }
+
+            formData.append('file', file);
+            showLoading();
+            updateProgress(20);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                updateProgress(60);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Er is een fout opgetreden');
+                }
+
+                updateProgress(80);
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = file.name.replace('.pdf', '_samenvatting.pdf');
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                updateProgress(100);
+                showStatus('Bestand succesvol verwerkt en gedownload!');
+                form.reset();
+
+            } catch (error) {
+                showStatus(error.message, true);
+            } finally {
+                hideLoading();
+            }
+        });
+    </script>
+</body>
+</html>
