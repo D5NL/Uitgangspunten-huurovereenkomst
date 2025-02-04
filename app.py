@@ -8,7 +8,9 @@ app = Flask(__name__, static_url_path='', static_folder='.')
 
 def extract_rental_details(pdf_file):
     details = {}
-    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    pdf_file.seek(0)  # Reset the file pointer to the beginning
+    pdf_data = pdf_file.read()
+    doc = fitz.open(stream=pdf_data, filetype="pdf")
     for page in doc:
         text = page.get_text("text")
         if text:
