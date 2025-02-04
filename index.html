@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Huurovereenkomst Upload</title>
+</head>
+<body>
+  <h1>Upload Huurovereenkomst</h1>
+  <form id="uploadForm">
+    <input type="file" id="fileInput" name="file" accept=".pdf" required />
+    <button type="submit">Upload en Genereer Voorblad</button>
+  </form>
+  <p id="status"></p>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    const status = document.getElementById("status");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById("fileInput");
+      if (!fileInput.files[0]) {
+        status.textContent = "Selecteer een bestand!";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      status.textContent = "Bezig met uploaden...";
+
+      try {
+        const response = await fetch("/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          status.textContent = `Fout: ${error.error}`;
+          return;
+        }
+
+        // Download de gegenereerde PDF
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = "voorblad_samenvatting.pdf";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+        status.textContent = "Download voltooid!";
+      } catch (err) {
+        status.textContent = `Er ging iets mis: ${err.message}`;
+      }
+    });
+  </script>
+</body>
+</html>
